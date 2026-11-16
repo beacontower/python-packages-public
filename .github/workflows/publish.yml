@@ -1,0 +1,30 @@
+name: Publish
+
+# Publishes `beacontower` to PyPI when a GitHub release is published. It uses PyPI's
+# trusted publishing (no token): the project on PyPI must name this repository, this
+# workflow file and the environment `pypi` as its trusted publisher. The version is the
+# one in beacontower/pyproject.toml; PyPI refuses a version it has seen before.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.11"
+      - name: Build
+        run: pip install build && python -m build beacontower
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: beacontower/dist

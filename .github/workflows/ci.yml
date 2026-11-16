@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [beacontower]
+        python-version: ["3.11", "3.13"]
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Pinned so a new release of a tool cannot silently change the result.
+      - name: Install pinned dev tools
+        run: pip install ruff==0.17.0 mypy==2.4.0 pydoclint==0.11.0
+
+      - name: Install package
+        run: pip install ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check src/
+
+      - name: Ruff format
+        run: ruff format --check src/ tests/
+
+      - name: Mypy
+        run: mypy src/
+
+      - name: Pydoclint
+        run: pydoclint --config pyproject.toml src/
+
+      - name: Pytest
+        run: pytest
