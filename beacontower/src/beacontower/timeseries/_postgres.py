@@ -39,12 +39,14 @@ _QUERY_RANGE_BINNED_AVERAGE = SQL("""
                 GROUP BY bin
         """)
 # True time-weighted average (TimescaleDB Toolkit's time_weight), one row per bin that
-# holds a reading, plus one for the seed: the newest reading before dt_start, which tells
-# the first bin what held at its start. interpolated_average weighs the whole bin, not
-# only first-to-last reading: it starts from the previous summary's last reading and, for
-# LOCF, holds the bin's last reading to the bin's end (for Linear it runs on to the next
-# summary's first reading). Bins without a reading have no row; _fill_twa_bins fills them
-# from the first/last readings returned here. NULL (non-numeric) and NaN rows are skipped.
+# holds a reading, plus one for each seed: the newest reading before dt_start, which tells
+# the first bin what held at its start, and the first reading from dt_end on, which a
+# Linear average needs to draw the line out of the last reading. interpolated_average
+# weighs the whole bin, not only first-to-last reading: it starts from the previous
+# summary's last reading and, for LOCF, holds the bin's last reading to the bin's end
+# (for Linear it runs on to the next summary's first reading). Bins without a reading
+# have no row; _fill_twa_bins fills them from the first/last readings returned here.
+# NULL (non-numeric) and NaN rows are skipped.
 _TWA_SERIES_FILTER = SQL("""modelid=%(model_id)s
                     AND assetid=%(asset_id)s
                     AND timeseries_name=%(timeseries_name)s
@@ -61,10 +63,15 @@ _QUERY_RANGE_BINNED_TIME_WEIGHT = SQL("""
                 WHERE {series_filter}
                     AND time >= %(dt_start)s::timestamptz
                     AND time < %(dt_end)s::timestamptz)
+            UNION ALL
+            (SELECT time, {value} AS value FROM {table}
+                WHERE {series_filter}
+                    AND time >= %(dt_end)s::timestamptz
+                ORDER BY time LIMIT 1)
         ), summaries AS (
             SELECT time_bucket(%(interval_size)s::interval, time, origin => %(dt_start)s::timestamptz) AS bin,
                     time_weight(%(how)s::text, time, value) AS tw,
-                    COUNT(*) AS cnt,
+                    COUNT(*) FILTER (WHERE time >= %(dt_start)s::timestamptz AND time < %(dt_end)s::timestamptz) AS cnt,
                     MIN(time) AS first_time,
                     FIRST(value, time) AS first_value,
                     MAX(time) AS last_time,
