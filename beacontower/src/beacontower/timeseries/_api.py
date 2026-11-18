@@ -16,6 +16,8 @@ _ALL_TYPES = ("telemetry", "propertyReported", "propertyDesired", "Forecast", "R
 # The API's limits on a page (its defaults; a deployment may set others).
 _MAX_PAGE_SIZE = 10_000
 _MAX_BINS_PAGE_SPAN = timedelta(days=1000)
+# The API cuts bins in whole multiples of the bin size from this instant, a Monday.
+_GRID_ORIGIN = pd.Timestamp("2000-01-03", tz="UTC")
 
 
 def _iso(dt: datetime) -> str:
@@ -140,8 +142,7 @@ class ApiTelemetry:
         items = self._one_series(entries, timeseries_name)
         if not items or items[0].get("value") is None:
             return default_value_if_none
-        value: float | int = items[0]["value"]
-        return value
+        return float(items[0]["value"])
 
     def dump_values(self, model_id: str, asset_id: str, dt_start: datetime, dt_end: datetime) -> pd.DataFrame:
         """Dump all values for an asset over [dt_start, dt_end), one row per reading.
@@ -190,6 +191,15 @@ class ApiTelemetry:
         """
         if how != "locf":
             raise NotImplementedError(f"the timeseries API computes only how='locf', not {how!r}; use the database reader for it")
+        start = pd.Timestamp(dt_start)
+        start = start.tz_localize("UTC") if start.tzinfo is None else start.tz_convert("UTC")
+        if (start - _GRID_ORIGIN) % bin_size:
+            raise ValueError(
+                f"the timeseries API cuts {bin_size} bins on a fixed grid, counted from a Monday at midnight UTC, which"
+                f" {dt_start} is not on; start on the grid, or use the database reader, which counts bins from dt_start"
+            )
+        # Whole bins, as the database reader: a last bin past dt_end is read to its own end.
+        dt_end = max(dt_end, dt_start + -(-(dt_end - dt_start) // bin_size) * bin_size)
         res = self._bins(
             model_id, asset_id, timeseries_name, dt_start, dt_end, bin_size, function="twa", fill="value", default=default_if_none_value
         )

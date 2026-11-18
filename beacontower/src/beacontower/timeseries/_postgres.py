@@ -1,11 +1,12 @@
 """Telemetry read straight from the TimescaleDB that Beacon Tower stores it in."""
 
+import contextlib
 from datetime import datetime, timedelta
 from typing import Literal, get_args
 
 import pandas as pd
 import psycopg
-from psycopg.sql import SQL, Identifier
+from psycopg.sql import SQL, Composed, Identifier
 
 from .datamodel import TimeseriesCredentials
 
@@ -17,11 +18,16 @@ from .datamodel import TimeseriesCredentials
 _VALUE_COLUMNS = ("doublevalue", "floatvalue", "integervalue", "longvalue")
 _VALUE = SQL("COALESCE({cols})::float8").format(cols=SQL(", ").join(Identifier(c) for c in _VALUE_COLUMNS))
 
+# One series' readings that hold a finite number. NULL (non-numeric telemetry) and NaN rows
+# are skipped by every read, as the timeseries API skips them.
+_SERIES_FILTER = SQL("""modelid=%(model_id)s
+                    AND assetid=%(asset_id)s
+                    AND timeseries_name=%(timeseries_name)s
+                    AND {value} IS NOT NULL
+                    AND {value} <> 'NaN'::float8""")
 _QUERY_RANGE_RAW = SQL("""
         SELECT time, {value} as value, 1 AS cnt FROM {table}
-            WHERE modelid=%(model_id)s
-                AND assetid=%(asset_id)s
-                AND timeseries_name=%(timeseries_name)s
+            WHERE {series_filter}
                 AND time >= %(dt_start)s
                 AND time < %(dt_end)s
             ORDER BY time
@@ -31,9 +37,7 @@ _QUERY_RANGE_BINNED_AVERAGE = SQL("""
                 AVG({value}) as value,
                 COUNT(*) as cnt
                 FROM {table}
-                WHERE modelid=%(model_id)s
-                    AND assetid=%(asset_id)s
-                    AND timeseries_name=%(timeseries_name)s
+                WHERE {series_filter}
                     AND time >= %(dt_start)s
                     AND time <= %(dt_end)s
                 GROUP BY bin
@@ -46,12 +50,6 @@ _QUERY_RANGE_BINNED_AVERAGE = SQL("""
 # summary's last reading and, for LOCF, holds the bin's last reading to the bin's end
 # (for Linear it runs on to the next summary's first reading). Bins without a reading
 # have no row; _fill_twa_bins fills them from the first/last readings returned here.
-# NULL (non-numeric) and NaN rows are skipped.
-_TWA_SERIES_FILTER = SQL("""modelid=%(model_id)s
-                    AND assetid=%(asset_id)s
-                    AND timeseries_name=%(timeseries_name)s
-                    AND {value} IS NOT NULL
-                    AND {value} <> 'NaN'::float8""")
 _QUERY_RANGE_BINNED_TIME_WEIGHT = SQL("""
         WITH readings AS (
             (SELECT time, {value} AS value FROM {table}
@@ -93,18 +91,14 @@ _QUERY_EXACT_VALUE_AT_TIME = SQL("""
                 LOCF(LAST({value}, time)) as value,
                 COUNT(*) as cnt
                 FROM {table}
-                WHERE modelid=%(model_id)s
-                    AND assetid=%(asset_id)s
-                    AND timeseries_name=%(timeseries_name)s
+                WHERE {series_filter}
                     AND time >= %(dt_start)s
-                    AND time <= %(dt_end)s
+                    AND time < %(dt_end)s
                 GROUP BY bin
-        """)  # NOTE: Needs to be shifted and shift interval/increase interval!
+        """)  # Run from dt_start - bin; the caller shifts each bin's label to its end.
 _QUERY_LATEST_VALUE = SQL("""
         SELECT {value} as value FROM {table}
-                WHERE modelid=%(model_id)s
-                    AND assetid=%(asset_id)s
-                    AND timeseries_name=%(timeseries_name)s
+                WHERE {series_filter}
                     AND time <= %(dt)s
                 ORDER BY time DESC LIMIT 1""")
 _QUERY_DUMP_ALL_VALUES = SQL("""
@@ -112,7 +106,7 @@ _QUERY_DUMP_ALL_VALUES = SQL("""
                 WHERE modelid=%(model_id)s
                     AND assetid=%(asset_id)s
                     AND time >= %(dt_start)s
-                    AND time <= %(dt_end)s""")
+                    AND time < %(dt_end)s""")
 
 
 TimeWeightMethod = Literal["locf", "linear"]
@@ -165,12 +159,21 @@ class PostgresTelemetry:
         self.conn: psycopg.Connection | None = None
         self.cursor: psycopg.Cursor | None = None
 
+    def _sql(self, query: SQL) -> Composed:
+        """Fill a query's table, value expression and series filter in."""
+        return query.format(
+            table=Identifier(self.timeseries_credential.table), value=_VALUE, series_filter=_SERIES_FILTER.format(value=_VALUE)
+        )
+
     def _get_connection(self, rollback: bool = False, reset: bool = False) -> psycopg.Connection:
         """Return the cached connection, opening it on first use.
 
         Roll back or reset the connection first when requested.
         """
         if reset:
+            if self.conn is not None:
+                with contextlib.suppress(psycopg.Error):
+                    self.conn.close()
             self.conn = None
             self.cursor = None
 
@@ -224,23 +227,20 @@ class PostgresTelemetry:
         """Return the latest value at or before `dt`, falling back to `default_value_if_none`."""
         cursor = self._get_cursor()
         cursor.execute(
-            _QUERY_LATEST_VALUE.format(table=Identifier(self.timeseries_credential.table), value=_VALUE),
+            self._sql(_QUERY_LATEST_VALUE),
             {"model_id": model_id, "asset_id": asset_id, "timeseries_name": timeseries_name, "dt": dt},
         )
         res = cursor.fetchone()
-        if res is None:
-            return default_value_if_none
-        value: float | int = res[0]
-        return value
+        return default_value_if_none if res is None else float(res[0])
 
     def dump_values(self, model_id: str, asset_id: str, dt_start: datetime, dt_end: datetime) -> pd.DataFrame:
-        """Dump all values for an asset over [dt_start, dt_end].
+        """Dump all values for an asset over [dt_start, dt_end).
 
         Returns a long DataFrame with one row per reading.
         """
         cursor = self._get_cursor()
         cursor.execute(
-            _QUERY_DUMP_ALL_VALUES.format(table=Identifier(self.timeseries_credential.table)),
+            self._sql(_QUERY_DUMP_ALL_VALUES),
             {
                 "model_id": model_id,
                 "asset_id": asset_id,
@@ -282,7 +282,10 @@ class PostgresTelemetry:
                     result_row["type"] = column
                     result_row["value"] = row[column]
                     result.append(result_row)
-        return pd.DataFrame(result)
+        out = pd.DataFrame(result, columns=["model_id", "asset_id", "timeseries_name", "time", "insertion_time", "type", "value"])
+        for column in ("time", "insertion_time"):
+            out[column] = pd.to_datetime(out[column], utc=True)
+        return out
 
     def get_values_range(  # noqa: PLR0913, PLR0917
         self,
@@ -298,7 +301,7 @@ class PostgresTelemetry:
         return_count: bool = True,
         default_if_none_value: float = 0,
     ) -> pd.Series | pd.DataFrame:
-        """Fetch binned telemetry for one (model, asset, timeseries) over [dt_start, dt_end].
+        """Fetch binned telemetry for one (model, asset, timeseries) over [dt_start, dt_end).
 
         Aggregation priority is twa > average > raw > value-at-time (the first flag set
         wins). Returns a DataFrame with `value` and `cnt` when `return_count` is True,
@@ -322,7 +325,7 @@ class PostgresTelemetry:
         cursor = self._get_cursor()
         if do_average:
             cursor.execute(
-                _QUERY_RANGE_BINNED_AVERAGE.format(table=Identifier(self.timeseries_credential.table), value=_VALUE),
+                self._sql(_QUERY_RANGE_BINNED_AVERAGE),
                 {
                     "interval_size": bin_size,
                     "dt_start": dt_start,
@@ -341,7 +344,7 @@ class PostgresTelemetry:
             res["value"] = res["value"].astype(float).fillna(default_if_none_value)
         elif raw_values:
             cursor.execute(
-                _QUERY_RANGE_RAW.format(table=Identifier(self.timeseries_credential.table), value=_VALUE),
+                self._sql(_QUERY_RANGE_RAW),
                 {
                     "dt_start": dt_start,
                     "model_id": model_id,
@@ -361,23 +364,21 @@ class PostgresTelemetry:
                 default_value_if_none=default_if_none_value,
             )
             cursor.execute(
-                _QUERY_EXACT_VALUE_AT_TIME.format(
-                    table=Identifier(self.timeseries_credential.table),
-                    value=_VALUE,
-                ),
+                self._sql(_QUERY_EXACT_VALUE_AT_TIME),
                 {
                     "interval_size": bin_size,
                     "dt_start": dt_start - bin_size,
                     "model_id": model_id,
                     "asset_id": asset_id,
                     "timeseries_name": timeseries_name,
-                    "dt_end": dt_end - bin_size,
+                    "dt_end": dt_end,
                     "previous_value": previous_value,
                 },
             )
             res = pd.DataFrame(cursor.fetchall(), columns=[col.name for col in cursor.description or []]).set_index("bin").sort_index()
             res.index = res.index + bin_size
             res["value"] = res["value"].astype(float).fillna(previous_value)
+        res.index = pd.DatetimeIndex(res.index).tz_convert("UTC")
         if return_count:
             res["cnt"] = res["cnt"].astype(float).fillna(0).astype(int)
             return res
@@ -413,14 +414,12 @@ class PostgresTelemetry:
         start, end = (pd.Timestamp(dt) for dt in (dt_start, dt_end))
         start, end = (dt.tz_localize("UTC") if dt.tzinfo is None else dt.tz_convert("UTC") for dt in (start, end))
         bins = pd.date_range(start=start, end=end, freq=bin_size, inclusive="left")
+        # Whole bins: a last bin that runs past dt_end is read and weighed to its own end.
+        end = max(end, bins[-1] + bin_size) if len(bins) else end
 
         cursor = self._get_cursor()
         cursor.execute(
-            _QUERY_RANGE_BINNED_TIME_WEIGHT.format(
-                table=Identifier(self.timeseries_credential.table),
-                value=_VALUE,
-                series_filter=_TWA_SERIES_FILTER.format(value=_VALUE),
-            ),
+            self._sql(_QUERY_RANGE_BINNED_TIME_WEIGHT),
             {
                 "interval_size": bin_size,
                 "dt_start": start.to_pydatetime(),

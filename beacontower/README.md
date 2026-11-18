@@ -62,20 +62,23 @@ An existing `BeaconTowerClient` can be reused: `TelemetryClient.from_beacon_towe
 
 ### Where the two sources differ
 
-The methods, arguments and shapes are the same. The answers can differ in these cases:
+The methods, arguments and shapes are the same, and for one component of numeric
+telemetry the two give the same frames. They were compared read by read against
+timeseries API 0.2.15. The answers differ in these cases:
 
 | | Timeseries API | Database |
 |---|---|---|
-| Bin edges | A fixed grid: whole multiples of the bin size from a Monday at midnight UTC | Counted from `dt_start` |
-| End of the period | Excluded | Included by the binned reads, which then drop the last bin; excluded by `raw_values` and the time-weighted average |
+| Time-weighted average after now | No value: a bin that starts after the current time gets `default_if_none_value`, also when it holds future-dated readings | The last reading is held, and future-dated readings are weighed |
+| Time-weighted average, start of the bins | `dt_start` must lie on the API's grid (whole multiples of the bin size from a Monday at midnight UTC), else `ValueError` | Counted from any `dt_start` |
+| Time-weighted average, `how` | `"locf"` only | `"locf"` and `"linear"`; needs the `timescaledb_toolkit` extension |
 | Component | One, the root unless `component_id` is given | Every component together |
 | Types | `telemetry` unless `types` is given | Every type together |
-| NaN readings | Skipped | Make a bin's average NaN (the time-weighted average skips them) |
-| Time-weighted average | `how="locf"` only, and only where the API has the function `twa` | `"locf"` and `"linear"`; needs the `timescaledb_toolkit` extension |
 | `dump_values` `type` column | The timeseries type, such as `telemetry` | The value's kind, such as `doublevalue` |
 
-With a `dt_start` on the API's grid, a period that ends on a bin edge, one component and
-no NaN reading, the two give the same bins.
+Both skip readings that hold no number (NaN, or a non-numeric value), read the period as
+`[dt_start, dt_end)`, weigh a last bin that runs past `dt_end` to its own end, and label
+bins in UTC. The averages and the value-at-time read are cut on the same fixed grid by
+both.
 
 ## License
 
