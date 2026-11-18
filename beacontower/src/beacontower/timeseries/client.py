@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from beacontower.timeseries.datamodel import TimeseriesCredentials
 
 if TYPE_CHECKING:
+    import ssl
     from collections.abc import Sequence
     from datetime import datetime, timedelta
 
@@ -64,20 +65,21 @@ class TelemetryClient:
         *,
         resolve_url: bool = True,
         timeout: float = 60.0,
+        verify: bool | str | ssl.SSLContext = True,
         types: Sequence[str] = ("telemetry",),
         component_id: str | None = None,
         match_model: bool = True,
     ) -> TelemetryClient:
         """Read through the timeseries API of the Beacon Tower at `url`.
 
-        `url`, `user_name`, `password` and `resolve_url` are those of
+        `url`, `user_name`, `password`, `resolve_url` and `verify` are those of
         :class:`beacontower.metadata.BeaconTowerClient`. `types` are the timeseries types
         read, `component_id` the component (the root when omitted), and `match_model`
         keeps a read to the rows written under exactly the model id it is given.
         """
         from beacontower.metadata.client import BeaconTowerClient  # noqa: PLC0415 -- keeps the database path free of httpx
 
-        client = BeaconTowerClient(url, user_name, password, resolve_url=resolve_url, timeout=timeout)
+        client = BeaconTowerClient(url, user_name, password, resolve_url=resolve_url, timeout=timeout, verify=verify)
         return cls.from_beacon_tower_client(client, types=types, component_id=component_id, match_model=match_model)
 
     @classmethod

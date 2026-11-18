@@ -1,6 +1,7 @@
 """Client for interacting with Beacon Tower."""
 
 import re
+import ssl
 import warnings
 from collections.abc import Mapping
 from typing import Any
@@ -32,28 +33,44 @@ from beacontower.metadata.datamodel import (
 )
 from beacontower.metadata.pagination import PaginatedList
 
+_KNOWN_CLIENT_VERSIONS = ("0.20.7", "0.30.0")
+Verify = bool | str | ssl.SSLContext
 
-def _identify_gateway(url: str, timeout: float = 10.0) -> str:
-    """
-    Return the gateway base URL. A URL that already has a path is returned as-is.
 
-    Reads the client version from index.html, then coreApi.url from the
-    /envConfig.<version>.js sitting alongside it.
+def _ssl_verify(verify: Verify) -> bool | ssl.SSLContext:
+    """Return what httpx takes as `verify`: a path to a CA bundle becomes an SSL context."""
+    return ssl.create_default_context(cafile=verify) if isinstance(verify, str) else verify
+
+
+def _identify_gateway(url: str, timeout: float = 10.0, verify: Verify = True) -> str:
     """
-    known_version = "0.20.7"
+    Return the gateway base URL.
+
+    A URL that already has a path is taken as the API's own address; a bare ``/api`` is
+    completed to ``/api/v1``, where the gateway serves it. For a bare host the client
+    version is read from index.html (or from the /version.js it loads), then coreApi.url
+    from the /envConfig.<version>.js sitting alongside it.
+    """
     url = (url if "://" in url else f"https://{url}").rstrip("/")
-    if urlparse(url).path:
-        return url + "/"
+    if path := urlparse(url).path:
+        return f"{url}/v1/" if path == "/api" else f"{url}/"
 
-    with httpx.Client(base_url=url, timeout=timeout, follow_redirects=True) as client:
+    with httpx.Client(base_url=url, timeout=timeout, follow_redirects=True, verify=_ssl_verify(verify)) as client:
         index = client.get("/").raise_for_status().text
-        if not (match := re.search(r"/version\.([\d.]+)\.js", index)):
+        if match := re.search(r"/version\.(\d[\d.]*)\.js", index):
+            version = match.group(1)
+        elif re.search(r"""src=["']/version\.js["']""", index):
+            published = re.search(r"""clientVersion\s*=\s*['"]([^'"]+)""", client.get("/version.js").raise_for_status().text)
+            if not published:
+                raise RuntimeError(f"{url} does not publish its client version")
+            version = published.group(1)
+        else:
             raise RuntimeError(f"{url} is not a Beacon Tower frontend")
-        if (version := match.group(1)) != known_version:
-            warnings.warn(f"{url} runs client {version}, not {known_version}", stacklevel=2)
+        if (release := re.match(r"[\d.]+", version)) is None or release.group().rstrip(".") not in _KNOWN_CLIENT_VERSIONS:
+            warnings.warn(f"{url} runs client {version}, not one of {_KNOWN_CLIENT_VERSIONS}", stacklevel=2)
         config = client.get(f"/envConfig.{version}.js").raise_for_status().text
 
-    found = re.search(r"""coreApi[^{]*\{[^}]*?url['"]\s*:\s*['"]([^'"]+)""", config)
+    found = re.search(r"""coreApi[^{]*\{[^}]*?url['"]?\s*:\s*['"]([^'"]+)""", config)
     if not found:
         raise RuntimeError(f"no coreApi URL published by {url}")
     return f"{found[1].rstrip('/')}/"
@@ -80,24 +97,38 @@ class BeaconTowerClient:
     # tenant --owner--> every sibling org would leak unrelated organizations.
     _relation_traverse_type = "organization"
 
-    def __init__(self, url: str, user_name: str, password: str, resolve_url: bool = True, timeout: float | None = None) -> None:
+    def __init__(  # noqa: PLR0913
+        self,
+        url: str,
+        user_name: str,
+        password: str,
+        resolve_url: bool = True,
+        timeout: float | None = None,
+        *,
+        verify: Verify = True,
+    ) -> None:
         """Create a client for the Beacon Tower at `url`, logging in with a user name and password.
 
         `url` is the address of the web client, from which the API's address is read, or
-        the API's own address when `resolve_url` is False. `timeout` is the seconds one
-        request may take; without it httpx's default applies.
+        the API's own address (``https://<host>/api/v1``; always, when `resolve_url` is
+        False). `timeout` is the seconds one request may take; without it httpx's default
+        applies. `verify` is httpx's: False to skip checking the server's certificate, or
+        the path of a CA bundle (or an ``ssl.SSLContext``) for a deployment signed by its
+        own authority.
         """
         self.url = url
+        self._request_options: dict[str, Any] = {"verify": _ssl_verify(verify)}
+        if timeout is not None:
+            self._request_options["timeout"] = timeout
         if resolve_url:
-            self.url = _identify_gateway(self.url)
+            self.url = _identify_gateway(self.url, verify=self._request_options["verify"])
         self.url = self.url if self.url.endswith("/") else self.url + "/"
         self.user_name = user_name
         self.password = password
 
         self.header: dict[str, str] | None = None
         self._logged_in = False
-        self._request_options: dict[str, Any] = {} if timeout is None else {"timeout": timeout}
-        self.client = httpx.Client()
+        self.client = httpx.Client(verify=self._request_options["verify"])
 
     def _get_headers(self) -> dict[str, str]:
         if self.header is None:
@@ -136,7 +167,11 @@ class BeaconTowerClient:
         source before running real work.
         """
         if self.header is None:
-            auth = httpx.post(self.url + self._authentication_suffix, json={"username": self.user_name, "password": self.password})
+            auth = httpx.post(
+                self.url + self._authentication_suffix,
+                json={"username": self.user_name, "password": self.password},
+                **self._request_options,
+            )
             token = auth.json().get("accessToken") if auth.status_code == httpx.codes.OK else None
             if not token:
                 raise RuntimeError(
@@ -145,7 +180,7 @@ class BeaconTowerClient:
                 )
             self.header = {"Authorization": f"Bearer {token}"}
             self._logged_in = True
-        probe = httpx.get(self.url + self._organizations_suffix, headers=self.header)
+        probe = httpx.get(self.url + self._organizations_suffix, headers=self.header, **self._request_options)
         if probe.status_code == httpx.codes.UNAUTHORIZED:
             raise RuntimeError(f"token rejected by {self.url} (401) -- endpoint/realm mismatch or expired credentials")
         probe.raise_for_status()
