@@ -20,7 +20,9 @@ model = bt.get_dtdl_model(assets[0].model_id)
 ```
 
 The address is the one you open Beacon Tower at in a browser; the client finds the API
-from it. Pass the API's own address with `resolve_url=False`.
+from it. The API's own address (`https://<host>/api/v1`) works as well; pass `resolve_url=False`
+to have any address used exactly as given. For a deployment signed by its own
+certificate authority, pass `verify="<path to its CA bundle>"`.
 
 ## Timeseries
 
