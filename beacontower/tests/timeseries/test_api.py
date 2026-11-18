@@ -182,3 +182,20 @@ def test_a_refused_query_says_why() -> None:
     api._post_json = refuse
     with pytest.raises(RuntimeError, match="read.function is not a known function"):
         client.get_values_range("m", "a", "power", _t(10), _t(12), HOUR, do_twa=True)
+
+
+def test_time_weighted_average_reads_whole_bins() -> None:
+    client, api = _client({"bins": [_series([{"timestamp": "2026-11-16T00:00:00Z", "value": 1.0, "count": 2}])]})
+    client.get_time_weighted_average("m", "a", "power", _t(0), _t(5, 30), HOUR)
+    assert api.bodies[0]["read"]["to"] == "2026-11-16T06:00:00+00:00"
+
+
+def test_time_weighted_average_off_the_grid_is_refused() -> None:
+    client, api = _client()
+    with pytest.raises(ValueError, match="fixed grid"):
+        client.get_time_weighted_average("m", "a", "power", _t(0, 20), _t(5, 20), HOUR)
+    with pytest.raises(ValueError, match="fixed grid"):  # 2026-11-17 is a Tuesday: a week's bins start on Monday
+        client.get_time_weighted_average(
+            "m", "a", "power", datetime(2026, 11, 17, tzinfo=UTC), datetime(2026, 12, 1, tzinfo=UTC), timedelta(days=7)
+        )
+    assert api.bodies == []
