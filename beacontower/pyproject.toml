@@ -8,7 +8,7 @@ dependencies = [
 ]
 requires-python = ">= 3.11"
 authors = [{ name = "Glaze Holding AB" }]
-description = "Python client for Beacon Tower: assets, models and devices, and their timeseries"
+description = "Python client for Beacon Tower: assets, models and devices, their timeseries, and the data provider's sources"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -39,6 +39,7 @@ include = ["beacontower.*"]
 [tool.setuptools.package-data]
 "beacontower.metadata" = ["py.typed"]
 "beacontower.timeseries" = ["py.typed"]
+"beacontower.dataproviders" = ["py.typed"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

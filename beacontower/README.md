@@ -1,7 +1,8 @@
 # beacontower
 
 Python client for [Beacon Tower](https://github.com/beacontower): the assets, models,
-devices and organizations of a tenant, and the timeseries its assets report.
+devices and organizations of a tenant, the timeseries its assets report, and the data
+provider's sources and their instances.
 
 ```
 pip install beacontower
@@ -79,6 +80,81 @@ Both skip readings that hold no number (NaN, or a non-numeric value), read the p
 `[dt_start, dt_end)`, weigh a last bin that runs past `dt_end` to its own end, and label
 bins in UTC. The averages and the value-at-time read are cut on the same fixed grid by
 both.
+
+## Data providers
+
+Beacon Tower's data provider brings in data no device measures: weather at a position
+(Open-Meteo), day-ahead electricity prices in a bidding zone (ENTSO-E) and exchange rates
+against SEK (the Riksbank). Each environment switches the sources on that it uses.
+`DataProvidersClient` shows which ones are on, lists their instances, and makes and removes them,
+all through the API.
+
+```python
+from beacontower.dataproviders import DataProvidersClient, Entsoe, OpenMeteo, Riksbank
+
+providers = DataProvidersClient(bt)  # a BeaconTowerClient, as above
+
+status = providers.status()
+for source in status.sources:
+    print(source.name, source.state, source.detail, source.devices)
+# openmeteo enabled Open-Meteo (...), every 01:00:00 {'ok': 3, 'pending': 0, ...}
+
+weather = providers.ensure(OpenMeteo(latitude=55.605, longitude=13.0038, history_days=30), wait=True)
+for instance in providers.instances("openmeteo"):
+    print(instance.id, instance.settings, instance.health, instance.last_success_at)
+
+providers.remove(weather.id)  # stops polling; the asset and its data stay unless delete_asset=True
+```
+
+An instance is a provider client provisioned with the source's settings, plus an asset with
+the same id on the source's model, bound to the client's signals. The asset holds the data:
+read it like any asset's (`asset_id` and `model_id` are on the instance).
+
+| Method | Does |
+|---|---|
+| `status()` | whether the provider is registered and reporting, and per source its state (`enabled`, `disabled`, `invalid`, or `unknown` without a status device), what it polls, its instances by health, and whether the platform has its model |
+| `instances(source=None)` | every instance, or one source's, with its settings, locked identity, `config_error`, last poll, history and units |
+| `get(id)`, `find(source)` | one instance, by id or by its identity settings (an Open-Meteo position, an ENTSO-E zone) |
+| `create(source, ...)` | the client, the asset, the binding, then the provisioning; undone when a step fails; `wait=True` returns after the first successful poll |
+| `ensure(source, ...)` | `find`, else `create`: Open-Meteo bills per position, so reuse one |
+| `remove(id, delete_asset=False)` | unprovisions (the provider stops polling) and deletes the client |
+| `wait_for_first_poll(id)` | raises `InstanceConfigError` with the provider's reason when it does not poll the instance |
+| `create_status_device()` | once per environment: the client the provider reports the sources' states to |
+
+Settings are checked before anything is sent: a position in range, history up to 3660 days,
+Open-Meteo variables the model has a channel for, an instance id without a dot. A source's
+identity settings (an Open-Meteo position, an ENTSO-E zone) are locked by the provider at the
+first successful poll; to change them, remove the instance and make another. The platform's
+`enabled` flag on a client does not stop the provider from polling it; `remove` does.
+
+### Adding a source
+
+Each source is a class. A new one subclasses `Source` with its tag name, its model and the
+tags that identify an instance, and declares its settings as fields, named as its device tags
+in snake_case. It registers itself: `instances()` reads it from then on, and `create` sends it.
+
+```python
+from typing import ClassVar
+from beacontower.dataproviders import Source
+
+class Nordpool(Source):
+    name: ClassVar[str] = "nordpool"
+    model_id: ClassVar[str] = "dtmi:dataproviders_nordpool;1.1"
+    identity: ClassVar[tuple[str, ...]] = ("area",)
+
+    area: str
+```
+
+A source the package has no class for is still listed by `status()` and `instances()`, its
+settings as an `OtherSource` holding the tags as they are.
+
+### Testing against an environment
+
+`tests/dataproviders/test_dataproviders_live.py` runs against a real Beacon Tower when
+`BEACONTOWER_URL` (the API's address) and `BEACONTOWER_TOKEN` (or `BEACONTOWER_USER` and
+`BEACONTOWER_PASSWORD`) are set; it makes one ENTSO-E instance, reads its prices back and removes
+it. `BEACONTOWER_VERIFY=false` accepts a self-signed certificate, and `BEACONTOWER_ORGANIZATION`
+names the organization when the login sees several.
 
 ## License
 

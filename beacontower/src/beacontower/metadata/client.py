@@ -150,13 +150,40 @@ class BeaconTowerClient:
         401, so a client that outlives its token keeps working. A header set by hand is
         left alone.
         """
-        send = httpx.get if method == "GET" else httpx.post
-        response = send(self.url + path, headers=self._get_headers(), **self._request_options, **kwargs)
+        # Looked up at each call (httpx.get, httpx.post, ...), so a test can replace one.
+        send = getattr(httpx, method.lower())
+        response: httpx.Response = send(self.url + path, headers=self._get_headers(), **self._request_options, **kwargs)
         if response.status_code == httpx.codes.UNAUTHORIZED and self._logged_in:
             self.header = None
             response = send(self.url + path, headers=self._get_headers(), **self._request_options, **kwargs)
         response.raise_for_status()
         return response
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Mapping[str, object] | None = None,
+        params: Mapping[str, str] | None = None,
+    ) -> httpx.Response:
+        """Send an authenticated request to the API; return the response, raise on a non-2xx status.
+
+        For endpoints this client has no method for. `method` is GET, POST, PUT, PATCH or
+        DELETE; `path` is relative to the API's address, such as ``providers/x/clients``. The
+        login, and the retry after an expired token, are those of every other call.
+        """
+        method = method.upper()
+        if method not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+            raise ValueError(f"unsupported method {method}")
+        kwargs: dict[str, Any] = {}
+        if json is not None:
+            if method in {"GET", "DELETE"}:
+                raise ValueError(f"a {method} request has no body")
+            kwargs["json"] = json
+        if params is not None:
+            kwargs["params"] = params
+        return self._send(method, path.lstrip("/"), **kwargs)
 
     def check_auth(self) -> None:
         """Verify the endpoint is reachable and the credentials authenticate.
