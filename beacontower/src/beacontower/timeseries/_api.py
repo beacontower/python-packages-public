@@ -1,13 +1,19 @@
 """Telemetry read through Beacon Tower's timeseries API (``POST timeseries/query``)."""
 
+import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
 import pandas as pd
 
 from beacontower.metadata.client import BeaconTowerClient
+
+if TYPE_CHECKING:
+    from beacontower.timeseries._api_get import GetReads
+
+logger = logging.getLogger(__name__)
 
 TimeWeightMethod = Literal["locf", "linear"]
 
@@ -18,6 +24,14 @@ _MAX_PAGE_SIZE = 10_000
 _MAX_BINS_PAGE_SPAN = timedelta(days=1000)
 # The API cuts bins in whole multiples of the bin size from this instant, a Monday.
 _GRID_ORIGIN = pd.Timestamp("2000-01-03", tz="UTC")
+# Logged once each time a reader switches to timeseries/get.
+_GET_FALLBACK_WARNING = (
+    "The gateway does not route timeseries/query (it answered 404), so telemetry is read through timeseries/get "
+    "instead, until do_reset. This fallback is temporary and will be removed once gateways route the query "
+    "(gateway 0.7.0-prod.5 and later do). Its answers differ as the beacontower README lists under "
+    '"Gateways without timeseries/query": readings of every model version are read, a signal that another '
+    "component also reports is refused, only telemetry and propertyReported are read, and dump_values is refused."
+)
 
 
 def _iso(dt: datetime) -> str:
@@ -56,6 +70,8 @@ class ApiTelemetry:
         self.types = list(types)
         self.component_id = component_id
         self.match_model = match_model
+        # Set once the gateway answers that it does not route timeseries/query.
+        self._get_reads: GetReads | None = None
 
     def _read(self, model_id: str | None, timeseries_name: str | None, **members: Any) -> dict[str, Any]:
         read: dict[str, Any] = {"types": self.types, **members}
@@ -68,7 +84,15 @@ class ApiTelemetry:
         return read
 
     def _query(self, select: str, asset_id: str, read: dict[str, Any], page_size: int | None = None) -> list[dict[str, Any]]:
-        """Post one query and follow its tokens; a series cut by a page is joined again."""
+        """Post one query and follow its tokens; a series cut by a page is joined again.
+
+        The API answers a query 200 or a problem, never 404: a 404 is the gateway's, which
+        does not route ``timeseries/query``. The read is then made of ``timeseries/get``,
+        and so is every read after it until :meth:`do_reset`; the switch is logged as a
+        warning.
+        """
+        if self._get_reads is not None:
+            return self._get_reads.query(select, asset_id, read)
         body: dict[str, Any] = {"select": select, "assetScope": [asset_id], "read": read}
         if page_size is not None:
             body["pageSize"] = page_size
@@ -77,6 +101,12 @@ class ApiTelemetry:
             try:
                 answer = self.client._post_json(_QUERY_PATH, json=body)  # noqa: SLF001
             except httpx.HTTPStatusError as error:
+                if error.response.status_code == httpx.codes.NOT_FOUND and "continuationToken" not in body:
+                    from beacontower.timeseries._api_get import GetReads  # noqa: PLC0415 -- only for gateways that need it
+
+                    logger.warning(_GET_FALLBACK_WARNING)
+                    self._get_reads = GetReads(self.client)
+                    return self._get_reads.query(select, asset_id, read)
                 detail = _problem_detail(error.response)
                 raise RuntimeError(f"the timeseries API refused the query ({error.response.status_code}): {detail}") from error
             for entry in answer.get(select) or []:
@@ -131,8 +161,9 @@ class ApiTelemetry:
         """Nothing to roll back: the API holds no session. Present to match the database reader."""
 
     def do_reset(self) -> None:
-        """Forget the access token, so that the next read logs in again."""
+        """Forget the access token and what the gateway routes; the next read starts afresh."""
         self.client.header = None
+        self._get_reads = None
 
     def get_latest_value(
         self, model_id: str, asset_id: str, timeseries_name: str, dt: datetime, default_value_if_none: float = 0
@@ -148,7 +179,8 @@ class ApiTelemetry:
         """Dump all values for an asset over [dt_start, dt_end), one row per reading.
 
         `type` holds the timeseries type (``telemetry``, ``propertyReported`` and so on):
-        the API does not name the value's kind, which the database reader puts there.
+        the API does not name the value's kind, which the database reader puts there. A
+        gateway that does not route ``timeseries/query`` cannot answer it.
         """
         read = self._read(model_id, None, **{"from": _iso(dt_start), "to": _iso(dt_end), "include": ["insertedAt"]})
         read["types"] = list(_ALL_TYPES)

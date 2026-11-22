@@ -81,6 +81,34 @@ Both skip readings that hold no number (NaN, or a non-numeric value), read the p
 bins in UTC. The averages and the value-at-time read are cut on the same fixed grid by
 both.
 
+### Gateways without `timeseries/query`
+
+Gateways released before the timeseries API's `timeseries/query` was routed answer it
+404. The client then reads through `timeseries/get` and `timeseries/get/last` instead,
+until `do_reset`, and bins the readings itself as the API bins them.
+
+This fallback is temporary: it will be removed from a later version of this package,
+once gateways route `timeseries/query` (gateway 0.7.0-prod.5 and later do). Each switch to
+it is logged as a warning on the `beacontower.timeseries` logger, which, like all of this
+package's logging, is shown once the application configures logging (for instance with
+`logging.basicConfig()`).
+
+The frames are the same, as compared read by read against timeseries API 0.2.15, except
+here:
+
+| | Through `timeseries/get` |
+|---|---|
+| Model version | Not kept to: the readings of every model id are read, as with `match_model=False` |
+| Component | A signal that a component other than the one read also reports is refused (`ValueError`) |
+| Types | `telemetry` and `propertyReported` only; properties need timeseries API 0.2.16 |
+| `dump_values` | Refused (`NotImplementedError`) |
+| The reading before a period | Looked for at most ten years back |
+| Now, for the time-weighted average | The client's clock |
+
+A read takes more requests this way: the signal's newest reading, the period (in parts
+where it holds more readings than one answer does), and for the value as of a time or a
+time-weighted average whose period does not start with a reading, the reading before it.
+
 ## Data providers
 
 Beacon Tower's data provider brings in data no device measures: weather at a position
