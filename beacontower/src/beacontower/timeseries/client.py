@@ -75,7 +75,9 @@ class TelemetryClient:
         `url`, `user_name`, `password`, `resolve_url` and `verify` are those of
         :class:`beacontower.metadata.BeaconTowerClient`. `types` are the timeseries types
         read, `component_id` the component (the root when omitted), and `match_model`
-        keeps a read to the rows written under exactly the model id it is given.
+        keeps a read to the rows written under exactly the model id it is given. A gateway
+        that does not route ``timeseries/query`` is read through ``timeseries/get``, with
+        the differences the package's README lists.
         """
         from beacontower.metadata.client import BeaconTowerClient  # noqa: PLC0415 -- keeps the database path free of httpx
 
