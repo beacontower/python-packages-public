@@ -68,7 +68,7 @@ python examples/login.py
 | `dump_values.py` | every reading of an asset, all signals |
 | `from_postgres.py` | the same reads straight from TimescaleDB |
 | `data_provider_status.py` | which data provider sources are on, and their instances |
-| `data_provider_instance.py` | making, reading and removing an instance (writes; asks for `--yes`) |
+| `data_provider_instance.py` | making, reading and removing instances for Malmö's weather and SE4 prices (writes; asks for `--yes`) |
 
 ## Metadata
 
@@ -193,8 +193,11 @@ for source in status.sources:
     print(source.name, source.state, source.detail, source.devices)
 # openmeteo enabled Open-Meteo (...), every 01:00:00 {'ok': 3, 'pending': 0, ...}
 
+# The weather in Malmö, and the day-ahead prices of bidding zone SE4.
 weather = providers.ensure(OpenMeteo(latitude=55.605, longitude=13.0038, history_days=30), wait=True)
-for instance in providers.instances("openmeteo"):
+# Sweden's bidding zones: "SE1" (Luleå), "SE2" (Sundsvall), "SE3" (Stockholm), "SE4" (Malmö).
+prices = providers.ensure(Entsoe(bidding_zone="SE4"), wait=True)
+for instance in providers.instances():
     print(instance.id, instance.settings, instance.health, instance.last_success_at)
 
 providers.remove(weather.id)  # stops polling; the asset and its data stay unless delete_asset=True

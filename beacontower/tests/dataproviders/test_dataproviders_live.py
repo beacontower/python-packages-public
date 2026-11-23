@@ -8,7 +8,7 @@ instance with its asset. Set:
 * BEACONTOWER_TOKEN, or BEACONTOWER_USER and BEACONTOWER_PASSWORD;
 * BEACONTOWER_VERIFY=false for a deployment with a self-signed certificate;
 * BEACONTOWER_ORGANIZATION when the login sees more than one organization;
-* BEACONTOWER_BIDDING_ZONE to use another zone than FI.
+* BEACONTOWER_BIDDING_ZONE to use another zone than SE4.
 """
 
 import os
@@ -57,7 +57,8 @@ def test_instances(providers: DataProvidersClient) -> None:
 
 
 def test_create_read_and_remove(providers: DataProvidersClient) -> None:
-    zone = os.environ.get("BEACONTOWER_BIDDING_ZONE", "FI")
+    # Sweden's bidding zones: "SE1" (Luleå), "SE2" (Sundsvall), "SE3" (Stockholm), "SE4" (Malmö).
+    zone = os.environ.get("BEACONTOWER_BIDDING_ZONE", "SE4")
     instance_id = f"sdk-live-{zone.lower()}-{int(time.time())}"
     source = Entsoe(bidding_zone=zone)
     try:

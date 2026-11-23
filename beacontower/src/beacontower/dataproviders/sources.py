@@ -177,8 +177,9 @@ class Entsoe(Source):
     """Day-ahead electricity prices in a bidding zone, from the ENTSO-E Transparency Platform.
 
     In EUR/MWh, at ENTSO-E's resolution (15 minutes or an hour). `bidding_zone` is a zone's short
-    name, such as ``SE3``; the provider knows the Nordic, Baltic and several central European
-    zones, and reports any other as the instance's configuration error.
+    name, such as ``SE4`` (Sweden's are ``SE1`` to ``SE4``). The provider knows the Nordic, Baltic
+    and several central European zones, and reports any other as the instance's configuration
+    error.
     """
 
     name: ClassVar[str] = "entsoe"
@@ -193,11 +194,11 @@ class Entsoe(Source):
     def _zone(cls, zone: str) -> str:
         zone = zone.strip().upper()
         if not _BIDDING_ZONE.match(zone):
-            raise ValueError(f"bidding_zone is a zone's short name, such as SE3, not {zone!r}")
+            raise ValueError(f"bidding_zone is a zone's short name, such as SE4, not {zone!r}")
         return zone
 
     def default_instance_id(self) -> str:
-        """``entsoe-se3-dayaheadprices`` for bidding zone SE3."""
+        """``entsoe-se4-dayaheadprices`` for bidding zone SE4."""
         return f"{self.name}-{self.bidding_zone.lower()}-{self.data_type.lower()}"
 
 

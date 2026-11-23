@@ -1,32 +1,44 @@
-"""Make a data provider instance, read what it brings in, and remove it again. This WRITES.
+"""Make data provider instances, read what they bring in, and remove them again. This WRITES.
 
-It creates an ENTSO-E instance (day-ahead prices for one bidding zone, by default Finland),
-waits for its first poll, prints the latest price and removes the instance with its asset.
-Run it with ``--yes``; without it, it only says what it would do. ENTSO-E must be switched on
-in the environment (see data_provider_status.py).
+It makes two instances for Malmö: the weather from Open-Meteo, and the day-ahead electricity
+prices of bidding zone SE4 from ENTSO-E. For each it waits for the first poll, prints a few of
+the newest values and removes the instance with its asset. They get ids of their own
+(``example-...``), so an instance the environment already has is never touched.
+
+Run it with ``--yes``; without it, it only says what it would do. Both sources must be
+switched on in the environment (see data_provider_status.py).
 """
 
 import sys
+import time
 from datetime import UTC, datetime
 
 from _common import connect
 
-from beacontower.dataproviders import DataProvidersClient, Entsoe
+from beacontower.dataproviders import DataProvidersClient, Entsoe, OpenMeteo
 from beacontower.timeseries import TelemetryClient
 
-source = Entsoe(bidding_zone="FI")
+MALMO = OpenMeteo(latitude=55.605, longitude=13.0038)
+# Sweden's bidding zones: "SE1" (Luleå), "SE2" (Sundsvall), "SE3" (Stockholm), "SE4" (Malmö).
+SE4 = Entsoe(bidding_zone="SE4")
+
 if "--yes" not in sys.argv:
-    sys.exit(f"Would create, read and remove an instance of {source!r}. Run again with --yes.")
+    sys.exit(f"Would make, read and remove instances of {MALMO!r} and {SE4!r}. Run again with --yes.")
 
 bt = connect()
 providers = DataProvidersClient(bt)
-instance = providers.create(source, wait=True)  # undone by itself if a step fails
-try:
-    print(f"Made {instance.id}: {instance.health}, asset {instance.asset_id}")
-    telemetry = TelemetryClient.from_beacon_tower_client(bt)
-    model_id, asset_id = instance.model_id or "", instance.asset_id or instance.id
-    for name in sorted(instance.units)[:3]:
-        print(f"  {name}: {telemetry.get_latest_value(model_id, asset_id, name, datetime.now(UTC))} {instance.units[name]}")
-finally:
-    providers.remove(instance.id, delete_asset=True)
-    print(f"Removed {instance.id} and its asset.")
+telemetry = TelemetryClient.from_beacon_tower_client(bt)
+suffix = int(time.time())
+for source in (MALMO, SE4):
+    # In real use, ensure() reuses an existing instance of the same settings instead.
+    instance = providers.create(source, instance_id=f"example-{source.name}-{suffix}")
+    try:
+        instance = providers.wait_for_first_poll(instance.id)
+        print(f"{instance.id}: {instance.health}, asset {instance.asset_id}")
+        model_id, asset_id = instance.model_id or "", instance.asset_id or instance.id
+        for name in sorted(instance.units)[:3]:
+            value = telemetry.get_latest_value(model_id, asset_id, name, datetime.now(UTC))
+            print(f"  {name}: {value} {instance.units[name]}")
+    finally:
+        providers.remove(instance.id, delete_asset=True)
+        print(f"Removed {instance.id} and its asset.")
