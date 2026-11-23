@@ -89,6 +89,8 @@ max-doc-length = 100
 
 [tool.mypy]
 python_version = "3.11"
+# Strict: every function typed, no implicit Any; CI runs mypy on src/ only.
+strict = true
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true

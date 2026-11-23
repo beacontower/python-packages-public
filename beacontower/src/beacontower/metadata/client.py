@@ -337,13 +337,13 @@ class BeaconTowerClient:
             payload = next((i for i in payload if i.get("@id") == model_id), payload[0])
         return Interface.model_validate(payload)
 
-    def _get_paginated(self, path: str, max_count: int | None = None) -> PaginatedList:
+    def _get_paginated(self, path: str, max_count: int | None = None) -> PaginatedList[Any]:
         """GET pages of an `{"items": [...], "continuationToken": ...}` endpoint,
         following the token as ?cursor=. A bare-list response is one page. Stops once
         `max_count` items have been collected (if given); the result's `.truncated`
         reports whether more was available.
         """
-        items: PaginatedList = PaginatedList()
+        items: PaginatedList[Any] = PaginatedList()
         cursor: str | None = None
         while True:
             params = {"cursor": cursor} if cursor else {}
