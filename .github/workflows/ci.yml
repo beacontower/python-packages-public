@@ -1,9 +1,10 @@
 name: CI
 
+# Lint, type check and test every package on each supported Python. Runs on pull requests,
+# and from publish.yml before each upload to PyPI (a push to main runs it there, once).
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -11,11 +12,18 @@ permissions:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    # The next Python, still a pre-release, only warns: its job may fail without failing CI.
+    continue-on-error: ${{ matrix.preview }}
     strategy:
       fail-fast: false
       matrix:
         package: [beacontower]
-        python-version: ["3.11", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        preview: [false]
+        include:
+          - package: beacontower
+            python-version: "3.15"
+            preview: true
     defaults:
       run:
         working-directory: ${{ matrix.package }}
@@ -24,6 +32,7 @@ jobs:
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
           python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
 
       # Pinned so a new release of a tool cannot silently change the result.
       - name: Install pinned dev tools
@@ -32,6 +41,7 @@ jobs:
       - name: Install package
         run: pip install ".[dev]"
 
+      # Tests are not linted (pyproject.toml ignores every rule there); they are formatted.
       - name: Ruff lint
         run: ruff check src/
 
@@ -45,4 +55,4 @@ jobs:
         run: pydoclint --config pyproject.toml src/
 
       - name: Pytest
-        run: pytest
+        run: pytest --cov=beacontower --cov-report=term
