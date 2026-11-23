@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import numbers
 from typing import TYPE_CHECKING, Any, Literal
 
 from beacontower.timeseries.datamodel import TimeseriesCredentials
@@ -18,6 +20,21 @@ if TYPE_CHECKING:
     from beacontower.timeseries._postgres import PostgresTelemetry
 
 TimeWeightMethod = Literal["locf", "linear"]
+
+
+def _default(value: object, name: str) -> float | int:
+    """Return `value` as the number a read falls back to.
+
+    A read's default must be a finite real number: an int or a float, numpy's included. NaN,
+    infinity, strings, None and booleans raise before anything is read, so a bad default
+    fails the same way with either source instead of deep inside one of them.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise TypeError(f"{name} must be a number (an int or a float), not {type(value).__name__}")
+    number = int(value) if isinstance(value, numbers.Integral) else float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be a finite number, not {value!r}")
+    return number
 
 
 class TelemetryClient:
@@ -113,8 +130,13 @@ class TelemetryClient:
     def get_latest_value(
         self, model_id: str, asset_id: str, timeseries_name: str, dt: datetime, default_value_if_none: float = 0
     ) -> float | int:
-        """Return the latest value at or before `dt`, falling back to `default_value_if_none`."""
-        value: float | int = self.source.get_latest_value(model_id, asset_id, timeseries_name, dt, default_value_if_none)
+        """Return the latest value at or before `dt`, falling back to `default_value_if_none`.
+
+        `default_value_if_none` must be a finite number: NaN, infinity or anything that is not
+        an int or a float raises (ValueError, TypeError) before anything is read.
+        """
+        default = _default(default_value_if_none, "default_value_if_none")
+        value: float | int = self.source.get_latest_value(model_id, asset_id, timeseries_name, dt, default)
         return value
 
     def dump_values(self, model_id: str, asset_id: str, dt_start: datetime, dt_end: datetime) -> pd.DataFrame:
@@ -144,8 +166,11 @@ class TelemetryClient:
         Aggregation priority is twa > average > raw > value-at-time (the first flag set
         wins). `do_twa` is :meth:`get_time_weighted_average` with ``how="locf"``. Returns a
         DataFrame with `value` and `cnt` when `return_count` is True, otherwise the `value`
-        Series; gaps use `default_if_none_value`.
+        Series; gaps use `default_if_none_value`, which must be a finite number: NaN, infinity
+        or anything that is not an int or a float raises (ValueError, TypeError) before anything
+        is read.
         """
+        default = _default(default_if_none_value, "default_if_none_value")
         return self.source.get_values_range(
             model_id,
             asset_id,
@@ -157,7 +182,7 @@ class TelemetryClient:
             do_average,
             raw_values,
             return_count,
-            default_if_none_value,
+            default,
         )
 
     def get_time_weighted_average(  # noqa: PLR0913, PLR0917
@@ -178,8 +203,10 @@ class TelemetryClient:
         averaged over time and not over readings. `how` says what holds between two
         readings: ``"locf"`` (default) holds a reading until the next one, ``"linear"``
         draws a line between them (database only). Returns `value` and `cnt` when
-        `return_count` is True, otherwise the `value` Series.
+        `return_count` is True, otherwise the `value` Series. `default_if_none_value` must be a
+        finite number, as for :meth:`get_values_range`.
         """
+        default = _default(default_if_none_value, "default_if_none_value")
         return self.source.get_time_weighted_average(
-            model_id, asset_id, timeseries_name, dt_start, dt_end, bin_size, how, return_count, default_if_none_value
+            model_id, asset_id, timeseries_name, dt_start, dt_end, bin_size, how, return_count, default
         )

@@ -61,6 +61,10 @@ hourly = telemetry.get_values_range(
 
 An existing `BeaconTowerClient` can be reused: `TelemetryClient.from_beacon_tower_client(bt)`.
 
+The value a read falls back to (`default_if_none_value`, `default_value_if_none`) must be a finite
+number, an int or a float. NaN, infinity or anything else raises `ValueError` or `TypeError` before
+anything is read. Count empty bins with `cnt`, which `return_count=True` gives.
+
 ### Where the two sources differ
 
 The methods, arguments and shapes are the same, and for one component of numeric
