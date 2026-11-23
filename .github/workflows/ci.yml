@@ -18,6 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         package: [beacontower]
+        # main's branch protection requires these jobs by name, "lint-and-test (beacontower, 3.11,
+        # false)" and so on: when this list changes, change the required checks with it.
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         preview: [false]
         include:
