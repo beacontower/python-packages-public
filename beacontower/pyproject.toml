@@ -88,6 +88,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # Tests can be messy -- pytest is the real gate for them; don't lint them for now.
 "tests/**" = ["ALL"]
+# Examples are scripts to read and copy: they print, and they are not a package.
+"examples/**" = ["T201", "INP001"]
 
 [tool.ruff.lint.pycodestyle]
 max-doc-length = 100

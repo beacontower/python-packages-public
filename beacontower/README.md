@@ -8,6 +8,68 @@ provider's sources and their instances.
 pip install beacontower
 ```
 
+Python 3.11 to 3.14. Reading timeseries straight from the database also needs
+`pip install "beacontower[postgres]"`.
+
+## What it is for
+
+The package is for code that works with a Beacon Tower tenant's data from Python: ML
+pipelines and data science first, and scripts and integrations next. It answers in pydantic
+models and pandas DataFrames, so the data goes straight into analysis.
+
+- **Metadata:** the organizations, assets, models (their DTDL: signals, units, types),
+  devices, enrollment groups, providers and the asset graph that the login may see.
+- **Timeseries:** what assets report, read through the timeseries API or straight from
+  TimescaleDB. It gives averages and time-weighted averages per bin, the value as of
+  fixed times, raw readings, the latest value, and every reading of an asset.
+- **Data providers:** the sources the data provider polls (weather, electricity prices,
+  exchange rates). It shows their state, and makes and removes their instances.
+
+Everything is read-only, apart from making and removing data provider instances. It doesn't
+cover the rest of the platform: registering or onboarding devices, writing telemetry,
+users and permissions, dashboards, alarms or live streams. It has no async client.
+
+## Logging in
+
+`BeaconTowerClient(url, user_name, password)` logs in with a user name and password, through
+the API's password login (`/auth/ropc`), and logs in again when its token runs out. **The
+account must not use MFA.** The password login has no field for a one-time code, so an
+account with an authenticator set up can't log in through it. Use an account that is
+exempt from MFA, such as the integration or ML user a tenant's administrator sets up with
+the `mfa-exempt` role, and keep its password in a secret store, not in code.
+
+The `url` is the address you open Beacon Tower at in a browser, and the client finds the API
+from it. Every call answers with what that account may see.
+
+## Examples
+
+[`examples/`](examples/) has a short script for every operation. Each one finds its own
+data from what the login can see, so you set the address and the account and run any of
+them:
+
+```
+export BEACONTOWER_URL=https://<your-beacon-tower> BEACONTOWER_USER=... BEACONTOWER_PASSWORD=...
+python examples/login.py
+```
+
+| Script | Shows |
+|---|---|
+| `login.py` | logging in, and where the API is |
+| `organizations.py` | organizations, and the assets and models in each |
+| `assets_and_models.py` | assets, a model, and the signals and properties it defines |
+| `devices.py` | devices, enrollment groups and a group's devices |
+| `providers.py` | the providers that bring data in |
+| `graph.py` | the asset graph |
+| `latest_values.py` | the newest reading of every signal of an asset |
+| `averages.py` | hourly averages over a day |
+| `time_weighted_average.py` | time-weighted averages |
+| `values_at_times.py` | the value at fixed times |
+| `raw_values.py` | every reading of a signal in a period |
+| `dump_values.py` | every reading of an asset, all signals |
+| `from_postgres.py` | the same reads straight from TimescaleDB |
+| `data_provider_status.py` | which data provider sources are on, and their instances |
+| `data_provider_instance.py` | making, reading and removing an instance (writes; asks for `--yes`) |
+
 ## Metadata
 
 ```python

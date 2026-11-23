@@ -43,13 +43,13 @@ jobs:
 
       # Tests are not linted (pyproject.toml ignores every rule there); they are formatted.
       - name: Ruff lint
-        run: ruff check src/
+        run: ruff check src/ examples/
 
       - name: Ruff format
-        run: ruff format --check src/ tests/
+        run: ruff format --check src/ tests/ examples/
 
       - name: Mypy
-        run: mypy src/
+        run: mypy src/ examples/
 
       - name: Pydoclint
         run: pydoclint --config pyproject.toml src/
