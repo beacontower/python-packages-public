@@ -324,12 +324,12 @@ def test_create_makes_client_asset_binding_then_provisions(tower: FakeTower, pro
 
 
 def test_a_failed_create_is_undone(tower: FakeTower, providers: DataProvidersClient) -> None:
-    tower.failing.add(("POST", "providers/dataproviders/clients/prices-fi/provision"))
+    tower.failing.add(("POST", "providers/dataproviders/clients/prices-se2/provision"))
 
     with pytest.raises(httpx.HTTPStatusError):
-        providers.create(Entsoe(bidding_zone="FI"), instance_id="prices-fi")
+        providers.create(Entsoe(bidding_zone="SE2"), instance_id="prices-se2")
 
-    assert tower.writes()[-2:] == [("DELETE", "assets/prices-fi"), ("DELETE", "providers/dataproviders/clients/prices-fi")]
+    assert tower.writes()[-2:] == [("DELETE", "assets/prices-se2"), ("DELETE", "providers/dataproviders/clients/prices-se2")]
     assert not tower.clients
     assert not tower.assets
 
@@ -337,10 +337,10 @@ def test_a_failed_create_is_undone(tower: FakeTower, providers: DataProvidersCli
 def test_create_refuses_an_existing_id(tower: FakeTower, providers: DataProvidersClient) -> None:
     _malmo(tower)
     with pytest.raises(InstanceExistsError):
-        providers.create(OpenMeteo(latitude=1, longitude=1), instance_id="weather-malmo")
+        providers.create(OpenMeteo(latitude=55.7047, longitude=13.191), instance_id="weather-malmo")
     tower.assets["lonely"] = {"id": "lonely"}
     with pytest.raises(InstanceExistsError):
-        providers.create(OpenMeteo(latitude=1, longitude=1), instance_id="lonely")
+        providers.create(OpenMeteo(latitude=55.7047, longitude=13.191), instance_id="lonely")
 
 
 def test_create_refuses_an_id_with_a_dot(providers: DataProvidersClient) -> None:
@@ -362,7 +362,7 @@ def test_create_needs_the_provider(tower: FakeTower, providers: DataProvidersCli
 
 def test_create_refuses_variables_the_model_lacks(tower: FakeTower, providers: DataProvidersClient) -> None:
     with pytest.raises(ValueError, match="snowfall"):
-        providers.create(OpenMeteo(latitude=1, longitude=1, variables=("temperature_2m", "snowfall")))
+        providers.create(OpenMeteo(latitude=55.7047, longitude=13.191, variables=("temperature_2m", "snowfall")))
     assert not tower.writes()
 
 
@@ -398,7 +398,7 @@ def test_ensure_finds_the_instance_at_the_position(tower: FakeTower, providers: 
 
 def test_ensure_compares_the_locked_position(tower: FakeTower, providers: DataProvidersClient) -> None:
     _malmo(tower)
-    tower.clients["weather-malmo"]["provisioningData"]["options"]["tags"]["latitude"] = 1.0  # changed after the lock
+    tower.clients["weather-malmo"]["provisioningData"]["options"]["tags"]["latitude"] = 57.7089  # changed after the lock
     assert providers.ensure(OpenMeteo(latitude=55.605, longitude=13.0038)).id == "weather-malmo"
 
 
@@ -438,7 +438,7 @@ def test_remove_refuses_the_status_device_and_unknown_ids(tower: FakeTower, prov
 
 
 def test_wait_returns_after_the_first_success(tower: FakeTower, providers: DataProvidersClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    tower.add_instance("w", {"source": "openmeteo", "latitude": 1, "longitude": 1})
+    tower.add_instance("w", {"source": "openmeteo", "latitude": 59.8586, "longitude": 17.6389})
     sleeps: list[float] = []
 
     def sleep(seconds: float) -> None:
@@ -462,7 +462,7 @@ def test_wait_raises_the_reported_config_error(tower: FakeTower, providers: Data
 def test_wait_times_out_with_the_last_error(tower: FakeTower, providers: DataProvidersClient, monkeypatch: pytest.MonkeyPatch) -> None:
     tower.add_instance(
         "w",
-        {"source": "openmeteo", "latitude": 1, "longitude": 1},
+        {"source": "openmeteo", "latitude": 59.8586, "longitude": 17.6389},
         {"lastPoll": {"at": "2026-11-22T08:01:00Z", "outcome": "failed", "error": "HTTP 503"}},
     )
     monkeypatch.setattr(client_module.time, "sleep", lambda _: None)

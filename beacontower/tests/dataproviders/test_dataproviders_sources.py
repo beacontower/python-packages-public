@@ -15,20 +15,20 @@ def test_open_meteo_tags_leave_out_what_is_not_set() -> None:
 
 
 def test_open_meteo_variables_are_a_list_tag() -> None:
-    tags = OpenMeteo(latitude=0, longitude=0, variables=("temperature_2m", "precipitation")).tags()
+    tags = OpenMeteo(latitude=55.7047, longitude=13.191, variables=("temperature_2m", "precipitation")).tags()
     assert tags["variables"] == ["temperature_2m", "precipitation"]
 
 
 @pytest.mark.parametrize(
     "fields",
     [
-        {"latitude": 91, "longitude": 0},
-        {"latitude": 0, "longitude": -181},
-        {"latitude": 0, "longitude": 0, "history_days": 3661},
-        {"latitude": 0, "longitude": 0, "history_days": -1},
-        {"latitude": 0, "longitude": 0, "variables": ()},
-        {"latitude": 0, "longitude": 0, "variables": ("Temperature",)},
-        {"lattitude": 0, "longitude": 0},
+        {"latitude": 91, "longitude": 13.0038},
+        {"latitude": 55.605, "longitude": -181},
+        {"latitude": 55.605, "longitude": 13.0038, "history_days": 3661},
+        {"latitude": 55.605, "longitude": 13.0038, "history_days": -1},
+        {"latitude": 55.605, "longitude": 13.0038, "variables": ()},
+        {"latitude": 55.605, "longitude": 13.0038, "variables": ("Temperature",)},
+        {"lattitude": 55.605, "longitude": 13.0038},
     ],
 )
 def test_open_meteo_refuses_bad_settings(fields: dict[str, object]) -> None:
@@ -38,7 +38,8 @@ def test_open_meteo_refuses_bad_settings(fields: dict[str, object]) -> None:
 
 def test_default_ids_hold_no_dot() -> None:
     assert OpenMeteo(latitude=55.605, longitude=13.0038).default_instance_id() == "openmeteo-55_6050n-13_0038e"
-    assert OpenMeteo(latitude=-33.8688, longitude=-70.6693).default_instance_id() == "openmeteo-33_8688s-70_6693w"
+    # Every Swedish position is north and east; Malmö mirrored gives the s and the w.
+    assert OpenMeteo(latitude=-55.605, longitude=-13.0038).default_instance_id() == "openmeteo-55_6050s-13_0038w"
     assert Entsoe(bidding_zone="se3").default_instance_id() == "entsoe-se3-dayaheadprices"
     assert Riksbank().default_instance_id() == "riksbank"
 
@@ -50,8 +51,8 @@ def test_entsoe_zone_is_upper_case_and_checked() -> None:
 
 
 def test_identity_values_follow_the_identity_tags() -> None:
-    assert OpenMeteo(latitude=1.5, longitude=2.5, history_days=9).identity_values() == (1.5, 2.5)
-    assert Entsoe(bidding_zone="FI").identity_values() == ("FI", "dayAheadPrices")
+    assert OpenMeteo(latitude=57.7089, longitude=11.9746, history_days=9).identity_values() == (57.7089, 11.9746)
+    assert Entsoe(bidding_zone="SE1").identity_values() == ("SE1", "dayAheadPrices")
     assert Riksbank(history_days=30).identity_values() == ()
 
 
@@ -66,8 +67,8 @@ def test_an_unknown_source_is_read_as_other_source() -> None:
 
 
 def test_tags_the_class_cannot_read_are_kept_as_they_are() -> None:
-    read = Source.from_tags({"source": "openmeteo", "latitude": 200, "longitude": 0})
-    assert read == OtherSource(source="openmeteo", settings={"latitude": 200, "longitude": 0})
+    read = Source.from_tags({"source": "openmeteo", "latitude": 200, "longitude": 13.0038})
+    assert read == OtherSource(source="openmeteo", settings={"latitude": 200, "longitude": 13.0038})
 
 
 def test_a_new_source_registers_itself() -> None:
