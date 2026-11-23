@@ -184,6 +184,13 @@ settings as an `OtherSource` holding the tags as they are.
 it. `BEACONTOWER_VERIFY=false` accepts a self-signed certificate, and `BEACONTOWER_ORGANIZATION`
 names the organization when the login sees several.
 
+## Versions
+
+Versions follow calendar versioning, `YYYY.MM.DD.Rev`: `2026.11.24.1` is the first release of
+that day. See `VERSIONING.md`. A release is published to PyPI from a GitHub release tagged
+`vYYYY.MM.DD.Rev`. An install from a git checkout reports `0.0.0+local`, because there the commit
+is the version.
+
 ## License
 
 MIT, see `LICENSE`.

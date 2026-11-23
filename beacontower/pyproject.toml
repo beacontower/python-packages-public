@@ -1,6 +1,6 @@
 [project]
 name = "beacontower"
-version = "0.1.0"
+dynamic = ["version"]
 dependencies = [
     "pydantic~=2.9",
     "httpx>=0.27,<1",
@@ -50,6 +50,7 @@ src = ["src", "tests"]
 target-version = "py311"
 
 [tool.ruff.lint.isort]
+# This distribution owns every module below beacontower it imports.
 known-first-party = ["beacontower"]
 
 [tool.ruff.lint]
@@ -70,7 +71,7 @@ ignore = [
     "RUF013", #Explicit optional parameters are suboptimal, but fine-ish
     "D107",   #Don't require docstring for __init__
     "CPY001", # we don't use copyright headers
-    "D213",   # summary on the second line -- conflicts with D212 (first line), which we keep
+    "D213",   # summary on the second line; D212 (the first line) is ignored too, so either style passes
     "D205",   # don't require a blank line after the docstring summary
     "D209",   # don't require the closing quotes on their own line
     "D415",   # don't require summary to end with . ? ! (D400's period is enough)
@@ -91,6 +92,8 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
+# Resolve modules below the beacontower namespace from src/. Without these, mypy names
+# them after the first folder that has an __init__.py and quietly drops their types.
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"

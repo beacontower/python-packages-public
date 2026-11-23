@@ -1,0 +1,18 @@
+{
+  "template": "git@github.com:beacontower/python-packages.git",
+  "commit": "4dab289423c4efd6e80725fb5b6332dbbe30be75",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "metadata",
+      "short_description": "Python client for Beacon Tower: assets, models and devices, their timeseries, and the data provider's sources",
+      "__package_name": "metadata",
+      "distribution_name": "beacontower",
+      "license": "MIT",
+      "repository_url": "https://github.com/beacontower/python-packages-public",
+      "_template": "git@github.com:beacontower/python-packages.git",
+      "_commit": "4dab289423c4efd6e80725fb5b6332dbbe30be75"
+    }
+  },
+  "directory": "cookiecutter/package_template"
+}
