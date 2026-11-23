@@ -1,47 +1,93 @@
 name: Publish
 
-# Publishes `beacontower` to PyPI when a GitHub release is published. It uses PyPI's
-# trusted publishing (no token): the project on PyPI must name this repository, this
-# workflow file and the environment `pypi` as its trusted publisher.
+# Every push to main, which is every merged pull request, is a release: CI runs first
+# (ci.yml), then this builds the packages and uploads them to PyPI.
 #
-# The version is CalVer (beacontower/VERSIONING.md) and comes from the release's tag:
-# v2026.11.24.1 publishes 2026.11.24.1. setup.py reads it from PACKAGE_VERSION. PyPI
-# refuses a version it has seen before, so a second release on a day raises the last part.
+# PyPI trusts this through trusted publishing, with no token. The project's publisher on
+# PyPI names owner `beacontower`, repository `python-packages-public`, workflow
+# `publish.yml` and environment `pypi`; renaming this file or the environment breaks
+# uploads until PyPI is changed to match.
+#
+# Versions are CalVer, YYYY.M.D.Rev (beacontower/VERSIONING.md): the UTC date of the
+# release, and Rev counting that day's releases from 1. Rev is one more than the highest
+# of that day already on PyPI or tagged here, so a rerun or a second merge on a day gets
+# a new version. After the upload the commit is tagged vYYYY.M.D.Rev and a GitHub release
+# is made for it.
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# One release at a time, in order, so two merges never compute the same version.
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write
+      contents: write # the version tag and the GitHub release
+      id-token: write # PyPI trusted publishing
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # the tags, to count the day's releases
       - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
         with:
-          python-version: "3.11"
-      - name: Version from the release tag
-        env:
-          TAG: ${{ github.event.release.tag_name }}
+          python-version: "3.12"
+
+      - name: Version
         run: |
-          version="${TAG#v}"
-          if ! [[ "$version" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}\.[0-9]+$ ]]; then
-            echo "::error::The release tag '$TAG' is not CalVer vYYYY.MM.DD.Rev (beacontower/VERSIONING.md)."
-            exit 1
-          fi
-          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+          day="$(date -u +%Y.%-m.%-d)"
+          rev="$(python - "$day" <<'EOF'
+          import json, subprocess, sys, urllib.error, urllib.request
+          day = sys.argv[1]
+          versions = set()
+          try:
+              with urllib.request.urlopen("https://pypi.org/pypi/beacontower/json", timeout=30) as answer:
+                  versions |= set(json.load(answer)["releases"])
+          except urllib.error.HTTPError as error:
+              if error.code != 404:  # 404: nothing published yet
+                  raise
+          tags = subprocess.run(["git", "tag", "--list", f"v{day}.*"], capture_output=True, text=True, check=True).stdout.split()
+          versions |= {tag.removeprefix("v") for tag in tags}
+          revs = [int(v.rsplit(".", 1)[1]) for v in versions if v.startswith(day + ".") and v.rsplit(".", 1)[1].isdigit()]
+          print(max(revs, default=0) + 1)
+          EOF
+          )"
+          echo "PACKAGE_VERSION=$day.$rev" >> "$GITHUB_ENV"
+          echo "Releasing $day.$rev"
+
       - name: Build
-        run: pip install build && python -m build beacontower
-      - name: Check the built version
+        run: pip install build twine && python -m build beacontower
+
+      - name: Check the build
         run: |
           ls beacontower/dist
           test -f "beacontower/dist/beacontower-${PACKAGE_VERSION}-py3-none-any.whl"
-      - name: Publish
+          twine check --strict beacontower/dist/*
+
+      - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: beacontower/dist
+
+      - name: Tag and release on GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag "v$PACKAGE_VERSION" "$GITHUB_SHA"
+          git push origin "v$PACKAGE_VERSION"
+          gh release create "v$PACKAGE_VERSION" beacontower/dist/* \
+            --title "beacontower $PACKAGE_VERSION" --generate-notes \
+            --notes "pip install beacontower==$PACKAGE_VERSION"

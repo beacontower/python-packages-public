@@ -190,10 +190,10 @@ names the organization when the login sees several.
 
 ## Versions
 
-Versions follow calendar versioning, `YYYY.MM.DD.Rev`: `2026.11.24.1` is the first release of
-that day. See `VERSIONING.md`. A release is published to PyPI from a GitHub release tagged
-`vYYYY.MM.DD.Rev`. An install from a git checkout reports `0.0.0+local`, because there the commit
-is the version.
+Every merge to `main` is a release on PyPI. Versions follow calendar versioning,
+`YYYY.M.D.Rev`: `2026.11.24.1` is the first release of that day, `2026.11.24.2` the second
+(see `VERSIONING.md`). Each release is tagged `vYYYY.M.D.Rev` on GitHub, with its notes. An
+install from a git checkout reports `0.0.0+local`, because there the commit is the version.
 
 ## License
 
