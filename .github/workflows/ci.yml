@@ -1,0 +1,60 @@
+name: CI
+
+# Lint, type check and test every package on each supported Python. Runs on pull requests,
+# and from publish.yml before each upload to PyPI (a push to main runs it there, once).
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    # The next Python, still a pre-release, only warns: its job may fail without failing CI.
+    continue-on-error: ${{ matrix.preview }}
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [beacontower]
+        # main's branch protection requires these jobs by name, "lint-and-test (beacontower, 3.11,
+        # false)" and so on: when this list changes, change the required checks with it.
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        preview: [false]
+        include:
+          - package: beacontower
+            python-version: "3.15"
+            preview: true
+    defaults:
+      run:
+        working-directory: ${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      # Pinned so a new release of a tool cannot silently change the result.
+      - name: Install pinned dev tools
+        run: pip install ruff==0.17.0 mypy==2.4.0 pydoclint==0.11.0
+
+      - name: Install package
+        run: pip install ".[dev]"
+
+      # Tests are not linted (pyproject.toml ignores every rule there); they are formatted.
+      - name: Ruff lint
+        run: ruff check src/ examples/
+
+      - name: Ruff format
+        run: ruff format --check src/ tests/ examples/
+
+      - name: Mypy
+        run: mypy src/ examples/
+
+      - name: Pydoclint
+        run: pydoclint --config pyproject.toml src/
+
+      - name: Pytest
+        run: pytest --cov=beacontower --cov-report=term
