@@ -43,7 +43,7 @@ from it. Every call answers with what that account may see.
 
 ## Examples
 
-[`examples/`](examples/) has a short script for every operation. Each one finds its own
+[`examples/`](https://github.com/beacontower/python-packages-public/tree/main/beacontower/examples) has a short script for every operation. Each one finds its own
 data from what the login can see, so you set the address and the account and run any of
 them:
 

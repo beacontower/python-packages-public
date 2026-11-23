@@ -25,6 +25,8 @@ classifiers = [
 
 [project.urls]
 Repository = "https://github.com/beacontower/python-packages-public"
+Examples = "https://github.com/beacontower/python-packages-public/tree/main/beacontower/examples"
+Releases = "https://github.com/beacontower/python-packages-public/releases"
 
 [project.optional-dependencies]
 # Reading timeseries straight from TimescaleDB; the timeseries API needs none of it.
