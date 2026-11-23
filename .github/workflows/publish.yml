@@ -91,3 +91,31 @@ jobs:
           gh release create "v$PACKAGE_VERSION" beacontower/dist/* \
             --title "beacontower $PACKAGE_VERSION" --generate-notes \
             --notes "pip install beacontower==$PACKAGE_VERSION"
+
+      # The coverage badge in the README reads badges/coverage.json on the `badges` branch
+      # through shields.io. Refreshed after each release; a failure here leaves the release be.
+      - name: Coverage badge
+        continue-on-error: true
+        run: |
+          pip install "./beacontower[dev]"
+          (cd beacontower && pytest -q --cov=beacontower --cov-report=json:../coverage-report.json)
+          python - <<'PY'
+          import json
+          percent = json.load(open("coverage-report.json"))["totals"]["percent_covered"]
+          color = next(c for limit, c in ((90, "brightgreen"), (80, "green"), (70, "yellowgreen"), (60, "yellow"), (0, "red")) if percent >= limit)
+          badge = {"schemaVersion": 1, "label": "coverage", "message": f"{percent:.0f}%", "color": color}
+          json.dump(badge, open("coverage-badge.json", "w"))
+          print(badge)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth 1 origin badges 2>/dev/null; then
+            git worktree add -B badges ../badges FETCH_HEAD
+          else
+            git worktree add --orphan -b badges ../badges
+          fi
+          cp coverage-badge.json ../badges/coverage.json
+          cd ../badges
+          git add coverage.json
+          git commit -m "coverage of $PACKAGE_VERSION" || echo "coverage unchanged"
+          git push origin badges
