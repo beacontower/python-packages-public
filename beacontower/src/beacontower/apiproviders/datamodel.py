@@ -1,4 +1,4 @@
-"""What the data provider client returns: the provider's status, its sources and their instances."""
+"""What the API provider client returns: the provider's status, its sources and their instances."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
-from beacontower.dataproviders.sources import OtherSource, Source  # noqa: TC001 -- pydantic reads the field types
+from beacontower.apiproviders.sources import OtherSource, Source  # noqa: TC001 -- pydantic reads the field types
 
 #: A status report older than this many of its intervals means the provider is not reporting.
 STALE_AFTER_INTERVALS = 3
@@ -53,7 +53,7 @@ class SourceStatus(BaseModel):
 
 
 class ProviderStatus(BaseModel):
-    """The data provider in this environment, as the platform's API shows it.
+    """The API provider in this environment, as the platform's API shows it.
 
     `registered`: the platform knows the provider. `status_device`: the provider's status device
     exists; without it the sources' states are unknown. `version`, `reported_at` and
@@ -108,7 +108,7 @@ class History(_Reported):
 
 
 class Instance(BaseModel):
-    """One instance of a data provider: a provider client, and the asset that holds its data.
+    """One instance of an API provider: a provider client, and the asset that holds its data.
 
     `settings` is what the instance was provisioned with, read into its source's class
     (:class:`OtherSource` for a source this package does not know). `config` is the identity

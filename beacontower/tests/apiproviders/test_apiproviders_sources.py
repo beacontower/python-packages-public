@@ -5,8 +5,8 @@ from typing import ClassVar
 import pytest
 from pydantic import ValidationError
 
-from beacontower.dataproviders import Entsoe, OpenMeteo, OtherSource, Riksbank, Source, source_class, source_classes
-from beacontower.dataproviders import sources as sources_module
+from beacontower.apiproviders import Entsoe, OpenMeteo, OtherSource, Riksbank, Source, source_class, source_classes
+from beacontower.apiproviders import sources as sources_module
 
 
 def test_open_meteo_tags_leave_out_what_is_not_set() -> None:
@@ -74,7 +74,7 @@ def test_tags_the_class_cannot_read_are_kept_as_they_are() -> None:
 def test_a_new_source_registers_itself() -> None:
     class Weatherstation(Source):
         name: ClassVar[str] = "weatherstation"
-        model_id: ClassVar[str] = "dtmi:dataproviders_weatherstation;1.1"
+        model_id: ClassVar[str] = "dtmi:apiproviders_weatherstation;1.1"
         identity: ClassVar[tuple[str, ...]] = ("stationId",)
 
         station_id: str

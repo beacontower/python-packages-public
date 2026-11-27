@@ -1,4 +1,4 @@
-"""Client for Beacon Tower's data provider: its sources, and their instances."""
+"""Client for Beacon Tower's API provider: its sources, and their instances."""
 
 from __future__ import annotations
 
@@ -10,50 +10,50 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from beacontower.dataproviders.datamodel import History, Instance, LastPoll, ProviderStatus, SourceState, SourceStatus
-from beacontower.dataproviders.sources import SOURCE_TAG, Source, source_class, source_classes
+from beacontower.apiproviders.datamodel import History, Instance, LastPoll, ProviderStatus, SourceState, SourceStatus
+from beacontower.apiproviders.sources import SOURCE_TAG, Source, source_class, source_classes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from beacontower.metadata.client import BeaconTowerClient
 
-#: The data provider's id in the platform.
-PROVIDER_ID = "dataproviders"
+#: The API provider's id in the platform.
+PROVIDER_ID = "apiproviders"
 
 #: The provider client the provider reports every source's state to (device tag ``source: status``).
-STATUS_DEVICE_ID = "dataproviders-status"
+STATUS_DEVICE_ID = "apiproviders-status"
 
 _STATUS_SOURCE = "status"
-_TEMPLATE_NAME = "Data providers"
+_TEMPLATE_NAME = "API providers"
 # An endpoint is "<provider>::<client>.<signal>", so a client id must not hold a dot.
 _INSTANCE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
-class DataProvidersError(Exception):
-    """A data provider call that cannot be done as asked."""
+class ApiProvidersError(Exception):
+    """An API provider call that cannot be done as asked."""
 
 
-class SourceNotAvailableError(DataProvidersError):
+class SourceNotAvailableError(ApiProvidersError):
     """The platform lacks what an instance of the source needs: the provider, or the model."""
 
 
-class InstanceExistsError(DataProvidersError):
+class InstanceExistsError(ApiProvidersError):
     """A provider client or asset with the instance's id exists already."""
 
 
-class InstanceNotFoundError(DataProvidersError):
+class InstanceNotFoundError(ApiProvidersError):
     """No instance has the id."""
 
 
-class InstanceConfigError(DataProvidersError):
+class InstanceConfigError(ApiProvidersError):
     """The provider does not poll the instance; the message is its reported configuration error."""
 
 
 def _model_id_of(name: str) -> str:
     """Return the model of the source `name`: its class's, else by the provider's convention."""
     cls = source_class(name)
-    return cls.model_id if cls is not None else f"dtmi:dataproviders_{name};1.1"
+    return cls.model_id if cls is not None else f"dtmi:apiproviders_{name};1.1"
 
 
 def _interval(text: object) -> timedelta | None:
@@ -64,13 +64,13 @@ def _interval(text: object) -> timedelta | None:
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
-class DataProvidersClient:
-    """The data provider of one Beacon Tower tenant, through its API.
+class ApiProvidersClient:
+    """The API provider of one Beacon Tower tenant, through its API.
 
     Built on a :class:`~beacontower.metadata.BeaconTowerClient`, whose address and login it uses::
 
         bt = BeaconTowerClient("https://<your-beacon-tower>", "<user name>", "<password>")
-        providers = DataProvidersClient(bt)
+        providers = ApiProvidersClient(bt)
         providers.status()                                   # which sources are enabled
         providers.ensure(OpenMeteo(latitude=55.605, longitude=13.0038))
 
@@ -156,7 +156,7 @@ class DataProvidersClient:
             self._send(
                 "POST",
                 f"providers/{PROVIDER_ID}/clients",
-                {"id": STATUS_DEVICE_ID, "displayName": "Data providers status", "organizationId": organization_id or self._organization()},
+                {"id": STATUS_DEVICE_ID, "displayName": "API providers status", "organizationId": organization_id or self._organization()},
             )
         tags = {SOURCE_TAG: _STATUS_SOURCE}
         self._send(
@@ -256,7 +256,7 @@ class DataProvidersClient:
 
         `instance_id` defaults to :meth:`Source.default_instance_id`, `display_name` to the id.
         `organization_id` defaults to the only organization the login sees; `template_id` to the
-        provider template named "Data providers", else the only enabled template for ``sdk``
+        provider template named "API providers", else the only enabled template for ``sdk``
         providers. With `wait`, returns after the first successful poll
         (:meth:`wait_for_first_poll`).
         """
@@ -423,8 +423,8 @@ def _normalized(values: tuple[Any, ...]) -> tuple[Any, ...]:
 __all__ = [
     "PROVIDER_ID",
     "STATUS_DEVICE_ID",
-    "DataProvidersClient",
-    "DataProvidersError",
+    "ApiProvidersClient",
+    "ApiProvidersError",
     "InstanceConfigError",
     "InstanceExistsError",
     "InstanceNotFoundError",

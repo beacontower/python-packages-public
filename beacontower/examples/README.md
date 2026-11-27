@@ -16,7 +16,7 @@ python examples/login.py
 environment. `_common.py` holds the login and the search for a signal with readings, which
 the timeseries examples share.
 
-Every script reads only, apart from `data_provider_instance.py`. It makes an instance, reads
+Every script reads only, apart from `api_provider_instance.py`. It makes an instance, reads
 it and removes it, and only when it is run with `--yes`. `from_postgres.py` also needs the
 database's address and login (`BEACONTOWER_PG_HOST`, `BEACONTOWER_PG_LOGIN`,
 `BEACONTOWER_PG_PASSWORD`) and `pip install "beacontower[postgres]"`.

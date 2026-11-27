@@ -60,7 +60,7 @@ OptionalTimestamp = Annotated[datetime | None, BeforeValidator(_none_if_min_date
 
 
 class Provider(BaseModel):
-    """A data provider (integration source), from GET providers/.
+    """A provider (integration source), from GET providers/.
 
     `type` is the provider kind (e.g. the integration technology). Filtering is not
     supported by the endpoint yet, so get_providers returns them all.

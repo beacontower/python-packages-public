@@ -5,7 +5,7 @@
   "context": {
     "cookiecutter": {
       "project_name": "metadata",
-      "short_description": "Python client for Beacon Tower: assets, models and devices, their timeseries, and the data provider's sources",
+      "short_description": "Python client for Beacon Tower: assets, models and devices, their timeseries, and the API provider's sources",
       "__package_name": "metadata",
       "distribution_name": "beacontower",
       "license": "MIT",

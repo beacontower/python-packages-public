@@ -1,4 +1,4 @@
-"""The providers that bring devices' data into the platform (MQTT, IoT Hub, the data provider)."""
+"""The providers that bring devices' data into the platform (MQTT, IoT Hub, the API provider)."""
 
 from _common import connect
 

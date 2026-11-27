@@ -1,4 +1,4 @@
-"""The data provider client against a real Beacon Tower; skipped unless BEACONTOWER_URL is set.
+"""The API provider client against a real Beacon Tower; skipped unless BEACONTOWER_URL is set.
 
 It reads the provider's status and instances, then makes one ENTSO-E instance (ENTSO-E's API costs
 nothing), waits for its first poll, reads the prices through the timeseries API, and removes the
@@ -17,14 +17,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from beacontower.dataproviders import DataProvidersClient, Entsoe, InstanceNotFoundError, SourceState
+from beacontower.apiproviders import ApiProvidersClient, Entsoe, InstanceNotFoundError, SourceState
 from beacontower.metadata.client import BeaconTowerClient
 
 pytestmark = pytest.mark.skipif(not os.environ.get("BEACONTOWER_URL"), reason="BEACONTOWER_URL is not set")
 
 
 @pytest.fixture(scope="module")
-def providers() -> DataProvidersClient:
+def providers() -> ApiProvidersClient:
     verify = os.environ.get("BEACONTOWER_VERIFY", "true").lower() not in {"false", "0", "no"}
     bt = BeaconTowerClient(
         os.environ["BEACONTOWER_URL"],
@@ -35,10 +35,10 @@ def providers() -> DataProvidersClient:
     )
     if token := os.environ.get("BEACONTOWER_TOKEN"):
         bt.header = {"Authorization": f"Bearer {token}"}
-    return DataProvidersClient(bt)
+    return ApiProvidersClient(bt)
 
 
-def test_status(providers: DataProvidersClient) -> None:
+def test_status(providers: ApiProvidersClient) -> None:
     status = providers.status()
     print(f"\nprovider {status.version}, reported {status.reported_at}, reporting {status.reporting}")  # noqa: T201
     for source in status.sources:
@@ -49,14 +49,14 @@ def test_status(providers: DataProvidersClient) -> None:
     assert status.source("entsoe").state is SourceState.ENABLED
 
 
-def test_instances(providers: DataProvidersClient) -> None:
+def test_instances(providers: ApiProvidersClient) -> None:
     for instance in providers.instances():
         print(f"\n  {instance.id}: {instance.settings!r} {instance.health}, asset {instance.asset_id}", end="")  # noqa: T201
         assert instance.source
         assert "primaryKey" not in instance.model_dump_json()
 
 
-def test_create_read_and_remove(providers: DataProvidersClient) -> None:
+def test_create_read_and_remove(providers: ApiProvidersClient) -> None:
     # Sweden's bidding zones: "SE1" (Luleå), "SE2" (Sundsvall), "SE3" (Stockholm), "SE4" (Malmö).
     zone = os.environ.get("BEACONTOWER_BIDDING_ZONE", "SE4")
     instance_id = f"sdk-live-{zone.lower()}-{int(time.time())}"
