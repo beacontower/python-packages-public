@@ -1,7 +1,7 @@
-"""Beacon Tower's data provider: which sources an environment polls, and their instances.
+"""Beacon Tower's API provider: which sources an environment polls, and their instances.
 
 The provider fetches data no device measures (weather at a position, day-ahead electricity
-prices, exchange rates) from external APIs into the platform. :class:`DataProvidersClient` shows
+prices, exchange rates) from external APIs into the platform. :class:`ApiProvidersClient` shows
 which of its sources an environment has switched on, lists the instances with their settings and
 state, and makes and removes them. Each source is a class: :class:`OpenMeteo`, :class:`Entsoe`
 and :class:`Riksbank`.
@@ -9,24 +9,24 @@ and :class:`Riksbank`.
 
 import logging
 
-from beacontower.dataproviders.client import (
+from beacontower.apiproviders.client import (
     PROVIDER_ID,
     STATUS_DEVICE_ID,
-    DataProvidersClient,
-    DataProvidersError,
+    ApiProvidersClient,
+    ApiProvidersError,
     InstanceConfigError,
     InstanceExistsError,
     InstanceNotFoundError,
     SourceNotAvailableError,
 )
-from beacontower.dataproviders.datamodel import History, Instance, LastPoll, ProviderStatus, SourceState, SourceStatus
-from beacontower.dataproviders.sources import Entsoe, OpenMeteo, OtherSource, Riksbank, Source, source_class, source_classes
+from beacontower.apiproviders.datamodel import History, Instance, LastPoll, ProviderStatus, SourceState, SourceStatus
+from beacontower.apiproviders.sources import Entsoe, OpenMeteo, OtherSource, Riksbank, Source, source_class, source_classes
 
 __all__ = [
     "PROVIDER_ID",
     "STATUS_DEVICE_ID",
-    "DataProvidersClient",
-    "DataProvidersError",
+    "ApiProvidersClient",
+    "ApiProvidersError",
     "Entsoe",
     "History",
     "Instance",

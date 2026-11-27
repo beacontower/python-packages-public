@@ -1,4 +1,4 @@
-"""The sources of Beacon Tower's data provider, one class per source.
+"""The sources of Beacon Tower's API provider, one class per source.
 
 An instance of a source is what one provider client fetches: weather at one position, day-ahead
 prices in one bidding zone, the Riksbank's exchange rates. Its settings become the client's device
@@ -142,11 +142,11 @@ class OpenMeteo(Source):
     temperature, wind speed and direction, precipitation, cloud cover, humidity, shortwave and
     direct radiation); `variables` replaces them, and each must be a channel of the model.
     Open-Meteo bills per position, so reuse an instance rather than making another at the same
-    position (:meth:`DataProvidersClient.ensure`).
+    position (:meth:`ApiProvidersClient.ensure`).
     """
 
     name: ClassVar[str] = "openmeteo"
-    model_id: ClassVar[str] = "dtmi:dataproviders_openmeteo;1.1"
+    model_id: ClassVar[str] = "dtmi:apiproviders_openmeteo;1.1"
     identity: ClassVar[tuple[str, ...]] = ("latitude", "longitude")
 
     latitude: float = Field(ge=-90, le=90)
@@ -183,7 +183,7 @@ class Entsoe(Source):
     """
 
     name: ClassVar[str] = "entsoe"
-    model_id: ClassVar[str] = "dtmi:dataproviders_entsoe;1.1"
+    model_id: ClassVar[str] = "dtmi:apiproviders_entsoe;1.1"
     identity: ClassVar[tuple[str, ...]] = ("biddingZone", "dataType")
 
     bidding_zone: str
@@ -210,4 +210,4 @@ class Riksbank(Source):
     """
 
     name: ClassVar[str] = "riksbank"
-    model_id: ClassVar[str] = "dtmi:dataproviders_riksbank;1.1"
+    model_id: ClassVar[str] = "dtmi:apiproviders_riksbank;1.1"

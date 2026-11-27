@@ -30,10 +30,10 @@ models and pandas DataFrames, so the data goes straight into analysis.
 - **Timeseries:** what assets report, read through the timeseries API or straight from
   TimescaleDB. It gives averages and time-weighted averages per bin, the value as of
   fixed times, raw readings, the latest value, and every reading of an asset.
-- **Data providers:** the sources the data provider polls (weather, electricity prices,
+- **API providers:** the sources the API provider polls (weather, electricity prices,
   exchange rates). It shows their state, and makes and removes their instances.
 
-Everything is read-only, apart from making and removing data provider instances. It doesn't
+Everything is read-only, apart from making and removing API provider instances. It doesn't
 cover the rest of the platform: registering or onboarding devices, writing telemetry,
 users and permissions, dashboards, alarms or live streams. It has no async client.
 
@@ -75,8 +75,8 @@ python examples/login.py
 | `raw_values.py` | every reading of a signal in a period |
 | `dump_values.py` | every reading of an asset, all signals |
 | `from_postgres.py` | the same reads straight from TimescaleDB |
-| `data_provider_status.py` | which data provider sources are on, and their instances |
-| `data_provider_instance.py` | making, reading and removing instances for Malmö's weather and SE4 prices (writes; asks for `--yes`) |
+| `api_provider_status.py` | which API provider sources are on, and their instances |
+| `api_provider_instance.py` | making, reading and removing instances for Malmö's weather and SE4 prices (writes; asks for `--yes`) |
 
 ## Metadata
 
@@ -183,18 +183,18 @@ A read takes more requests this way: the signal's newest reading, the period (in
 where it holds more readings than one answer does), and for the value as of a time or a
 time-weighted average whose period does not start with a reading, the reading before it.
 
-## Data providers
+## API providers
 
-Beacon Tower's data provider brings in data no device measures: weather at a position
+Beacon Tower's API provider brings in data no device measures: weather at a position
 (Open-Meteo), day-ahead electricity prices in a bidding zone (ENTSO-E) and exchange rates
 against SEK (the Riksbank). Each environment switches the sources on that it uses.
-`DataProvidersClient` shows which ones are on, lists their instances, and makes and removes them,
+`ApiProvidersClient` shows which ones are on, lists their instances, and makes and removes them,
 all through the API.
 
 ```python
-from beacontower.dataproviders import DataProvidersClient, Entsoe, OpenMeteo, Riksbank
+from beacontower.apiproviders import ApiProvidersClient, Entsoe, OpenMeteo, Riksbank
 
-providers = DataProvidersClient(bt)  # a BeaconTowerClient, as above
+providers = ApiProvidersClient(bt)  # a BeaconTowerClient, as above
 
 status = providers.status()
 for source in status.sources:
@@ -240,11 +240,11 @@ in snake_case. It registers itself: `instances()` reads it from then on, and `cr
 
 ```python
 from typing import ClassVar
-from beacontower.dataproviders import Source
+from beacontower.apiproviders import Source
 
 class Nordpool(Source):
     name: ClassVar[str] = "nordpool"
-    model_id: ClassVar[str] = "dtmi:dataproviders_nordpool;1.1"
+    model_id: ClassVar[str] = "dtmi:apiproviders_nordpool;1.1"
     identity: ClassVar[tuple[str, ...]] = ("area",)
 
     area: str
@@ -255,7 +255,7 @@ settings as an `OtherSource` holding the tags as they are.
 
 ### Testing against an environment
 
-`tests/dataproviders/test_dataproviders_live.py` runs against a real Beacon Tower when
+`tests/apiproviders/test_apiproviders_live.py` runs against a real Beacon Tower when
 `BEACONTOWER_URL` (the API's address) and `BEACONTOWER_TOKEN` (or `BEACONTOWER_USER` and
 `BEACONTOWER_PASSWORD`) are set; it makes one ENTSO-E instance, reads its prices back and removes
 it. `BEACONTOWER_VERIFY=false` accepts a self-signed certificate, and `BEACONTOWER_ORGANIZATION`
